@@ -1,19 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import argparse
-import os
 import logging
+import os
 from ast import literal_eval
 from datetime import datetime
+
+import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
 import torch.optim
-from seq2seq import models, datasets
-from seq2seq.tools.utils.log import setup_logging
-from seq2seq.tools.config import PAD
-import seq2seq.tools.trainer as trainers
 
+import seq2seq.tools.trainer as trainers
+from seq2seq import datasets, models
+from seq2seq.tools.config import PAD
+from seq2seq.tools.utils.log import setup_logging
 
 parser = argparse.ArgumentParser(description='PyTorch Seq2Seq Training')
 parser.add_argument('--dataset', metavar='DATASET', default='WMT16_de_en',
@@ -44,7 +45,7 @@ parser.add_argument('--trainer', metavar='TRAINER', default='Seq2SeqTrainer',
                     help='trainer used: ' +
                     ' | '.join(trainers.__all__) +
                     ' (default: Seq2SeqTrainer)')
-parser.add_argument('--type', default='torch.cuda.FloatTensor',
+parser.add_argument('--type', default='torch.FloatTensor',
                     help='type of tensor - e.g torch.cuda.HalfTensor')
 parser.add_argument('-j', '--workers', default=8, type=int,
                     help='number of data loading workers (default: 8)')
@@ -81,6 +82,7 @@ parser.add_argument('--max_length', default=100, type=int,
 
 
 def main(args):
+    # set up save path
     time_stamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     if args.evaluate:
         args.results_dir = '/tmp'
@@ -90,11 +92,13 @@ def main(args):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
+    # set up logging
     setup_logging(os.path.join(save_path, 'log_%s.txt' % time_stamp))
 
     logging.info("saving to %s", save_path)
     logging.debug("run arguments: %s", args)
 
+    # set up cuda
     args.devices = literal_eval(args.devices)
     if 'cuda' in args.type:
         main_gpu = 0
@@ -106,7 +110,7 @@ def main(args):
             main_gpu = args.devices.get('input', 0)
         torch.cuda.set_device(main_gpu)
         cudnn.benchmark = True
-
+    # set dataset
     dataset = getattr(datasets, args.dataset)
     args.data_config = literal_eval(args.data_config)
     train_data = dataset(args.dataset_dir, split='train', **args.data_config)
